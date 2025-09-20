@@ -6,6 +6,7 @@ use ggez::{
     event::{self},
     glam::*,
     graphics::{self, Color, DrawMode, DrawParam, Mesh, MeshBuilder, Rect},
+    winit::event::MouseButton,
 };
 use jonsh_chess::board::Board;
 
@@ -14,7 +15,9 @@ const BOARD_SIZE: usize = 8;
 struct MainState {
     board_mesh: Mesh,
     square_size: f32,
+    board_size: f32,
     origin: Vec2,
+    clicked_square: Option<(usize, usize)>,
 }
 
 impl MainState {
@@ -31,6 +34,8 @@ impl MainState {
         Ok(Self {
             board_mesh,
             square_size,
+            board_size: side,
+            clicked_square: None,
             origin,
         })
     }
@@ -60,6 +65,23 @@ impl MainState {
 
         return Ok(Mesh::from_data(ctx, data));
     }
+
+    fn px_to_square(&self, x: f32, y: f32) -> Option<(usize, usize)> {
+        let dx = x - self.origin.x;
+        let dy = y - self.origin.y;
+
+        if x < self.origin.x || y < self.origin.y {
+            return None;
+        };
+        if dx > self.board_size || dy > self.board_size {
+            return None;
+        };
+
+        let col = (dx / self.square_size).floor();
+        let row = (dy / self.square_size).floor();
+
+        Some((row as usize, col as usize))
+    }
 }
 
 impl event::EventHandler for MainState {
@@ -74,6 +96,22 @@ impl event::EventHandler for MainState {
         canvas.draw(&self.board_mesh, DrawParam::default());
 
         canvas.finish(ctx)?;
+
+        Ok(())
+    }
+
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        _button: ggez::winit::event::MouseButton,
+        _x: f32,
+        _y: f32,
+    ) -> Result<(), GameError> {
+        if _button == MouseButton::Left {
+            self.clicked_square = self.px_to_square(_x, _y);
+
+            println!("{:?}", self.clicked_square)
+        }
 
         Ok(())
     }

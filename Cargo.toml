@@ -4,3 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ggez = "0.10.0-rc0"
+jonsh_chess = {git = "https://github.com/INDA25PlusPlus/jonsh-chess.git", package = "jonsh-chess"}

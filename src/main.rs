@@ -16,6 +16,7 @@ use jonsh_chess::pieces;
 const BOARD_SIZE: usize = 8;
 
 struct MainState {
+    board: Board,
     board_mesh: Mesh,
     square_size: f32,
     board_size: f32,
@@ -26,6 +27,7 @@ struct MainState {
 
 impl MainState {
     fn new(ctx: &mut Context) -> GameResult<MainState> {
+        let board = Board::new();
         let w: f32 = 600.0;
         let h: f32 = 600.0;
         let pad = 20.0;
@@ -51,6 +53,7 @@ impl MainState {
         pieces.insert("bK", Image::from_path(ctx, "/pieces/black-king.png")?);
 
         Ok(Self {
+            board,
             board_mesh,
             square_size,
             board_size: side,
@@ -103,8 +106,8 @@ impl MainState {
         Some((row as usize, col as usize))
     }
 
-    fn place_pieces(&self, board: Board, canvas: &mut Canvas) -> Result<(), GameError> {
-        for (row_i, row) in board.tiles.iter().enumerate() {
+    fn place_pieces(&self, canvas: &mut Canvas) -> Result<(), GameError> {
+        for (row_i, row) in self.board.tiles.iter().enumerate() {
             for (col_i, tile) in row.iter().enumerate() {
                 let Tile::Occupied(color, piece) = tile else {
                     continue;
@@ -150,13 +153,11 @@ impl event::EventHandler for MainState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        let board = Board::new();
-
         let mut canvas =
             graphics::Canvas::from_frame(ctx, graphics::Color::from([0.1, 0.2, 0.3, 1.0]));
 
         canvas.draw(&self.board_mesh, DrawParam::default());
-        self.place_pieces(board, &mut canvas)?;
+        self.place_pieces(&mut canvas)?;
 
         canvas.finish(ctx)?;
 
@@ -169,13 +170,20 @@ impl event::EventHandler for MainState {
         _button: ggez::winit::event::MouseButton,
         _x: f32,
         _y: f32,
-    ) -> Result<(), GameError> {
+    ) -> GameResult {
         if _button == MouseButton::Left {
-            self.clicked_square = self.px_to_square(_x, _y);
-
-            println!("{:?}", self.clicked_square)
+            if let Some((row, col)) = self.px_to_square(_x, _y) {
+                match self.clicked_square {
+                    None => {
+                        self.clicked_square = Some((row, col));
+                    }
+                    Some((fr, fc)) => {
+                        self.board.move_piece(fc, fr, col, row);
+                        self.clicked_square = None;
+                    }
+                }
+            }
         }
-
         Ok(())
     }
 }

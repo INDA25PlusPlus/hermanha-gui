@@ -145,6 +145,23 @@ impl MainState {
 
         Ok(())
     }
+
+    fn highlight_square(&self, ctx: &mut Context, row: usize, col: usize) -> Result<Mesh, GameError>{
+        
+        let x = self.origin.x + col as f32 * self.square_size;
+        let y = self.origin.y + row as f32 * self.square_size;
+
+        let mut builder = MeshBuilder::new();
+
+        let bounds = Rect::new(x, y, self.square_size, self.square_size);
+        let color = Color::from_rgba(0, 217, 0, 100);
+        builder.rectangle(DrawMode::fill(), bounds, color)?;
+        builder.build();
+
+        let data = builder.build();
+
+        return Ok(Mesh::from_data(ctx, data));
+        }
 }
 
 impl event::EventHandler for MainState {
@@ -156,7 +173,14 @@ impl event::EventHandler for MainState {
         let mut canvas =
             graphics::Canvas::from_frame(ctx, graphics::Color::from([0.1, 0.2, 0.3, 1.0]));
 
+        
+
         canvas.draw(&self.board_mesh, DrawParam::default());
+
+        if let Some((row, col)) = self.clicked_square {
+            let highlight_mesh = self.highlight_square(ctx, row, col)?;
+            canvas.draw(&highlight_mesh, DrawParam::default());
+        }
         self.place_pieces(&mut canvas)?;
 
         canvas.finish(ctx)?;

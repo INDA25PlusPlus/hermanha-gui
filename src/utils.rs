@@ -1,6 +1,9 @@
 use jonsh_chess::board::Tile;
 use jonsh_chess::pieces::{Piece, Color};
 
+pub const MSG_SIZE: usize = 128;
+
+
 pub fn to_fen(tiles: [[Tile; 8]; 8]) -> String {
     let mut fen = String::new();
     let mut empty_squares: usize = 0;
@@ -57,7 +60,7 @@ pub fn make_move_string(fc: usize, fr: usize, tc: usize, tr: usize, white:bool) 
     format!("{}{}{}{}{}", from_file, from_rank, to_file, to_rank, piece)
 }
 
-pub fn from_move_string(mv: String) -> (usize, usize, usize, usize, String) {
+pub fn _from_move_string(mv: String) -> (usize, usize, usize, usize, String) {
     let files = ['A','B','C','D','E','F','G','H'];
 
     let from_file = mv.chars().nth(0).expect("missing from file");
@@ -78,4 +81,27 @@ pub fn from_move_string(mv: String) -> (usize, usize, usize, usize, String) {
     let tr_idx = 8-to_rank.to_digit(10).expect("invalid to rank") as usize;
 
     (ff_idx, fr_idx, tf_idx, tr_idx, prom_piece.to_string())
+}
+
+pub fn add_padding(msg: String) -> String{
+    let len = msg.len();
+    let diff = MSG_SIZE - len;
+    if diff != 0{
+        return msg.to_owned() +":" + &"0".repeat(diff-1)
+    } else {
+        return msg.to_string()
+    }
+}
+
+pub fn make_msg(quit:bool, mv: String, state: String, board: String) -> String{
+    let msg_type = if quit {"ChessQUIT"} else {"ChessMOVE"};
+    let msgs = vec![
+        msg_type.to_string(),
+        mv,
+        state,
+        board
+    ];
+    
+    let msg = msgs.join(":");
+    add_padding(msg)
 }

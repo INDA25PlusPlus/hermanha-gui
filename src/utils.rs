@@ -60,7 +60,7 @@ pub fn make_move_string(fc: usize, fr: usize, tc: usize, tr: usize, white:bool) 
     format!("{}{}{}{}{}", from_file, from_rank, to_file, to_rank, piece)
 }
 
-pub fn _from_move_string(mv: String) -> (usize, usize, usize, usize, String) {
+pub fn from_move_string(mv: &str) -> (usize, usize, usize, usize, String) {
     let files = ['A','B','C','D','E','F','G','H'];
 
     let from_file = mv.chars().nth(0).expect("missing from file");
@@ -69,18 +69,18 @@ pub fn _from_move_string(mv: String) -> (usize, usize, usize, usize, String) {
     let to_rank   = mv.chars().nth(3).expect("missing to rank");
     let prom_piece = mv.chars().nth(4).expect("missing prom piece");
 
-    let ff_idx = files.iter()
+    let fc = files.iter()
                       .position(|&c| c == from_file.to_ascii_uppercase())
                       .expect("invalid from file");
 
-    let tf_idx = files.iter()
+    let tc = files.iter()
                       .position(|&c| c == to_file.to_ascii_uppercase())
                       .expect("invalid to file");
 
-    let fr_idx = 8-from_rank.to_digit(10).expect("invalid from rank") as usize;
-    let tr_idx = 8-to_rank.to_digit(10).expect("invalid to rank") as usize;
+    let fr = 8-from_rank.to_digit(10).expect("invalid from rank") as usize;
+    let tr = 8-to_rank.to_digit(10).expect("invalid to rank") as usize;
 
-    (ff_idx, fr_idx, tf_idx, tr_idx, prom_piece.to_string())
+    (fc, fr, tc, tr, prom_piece.to_string())
 }
 
 pub fn add_padding(msg: String) -> String{

@@ -2,6 +2,14 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use std::collections::HashMap;
+use std::fmt::write;
+use std::{env, io};
+
+mod utils;
+use crate::utils::*;
+
+mod tcp_handler;
+use crate::tcp_handler::*;
 
 use ggez::{
     Context, GameError, GameResult,
@@ -9,6 +17,7 @@ use ggez::{
     glam::*,
     graphics::{self, Canvas, Color, DrawMode, DrawParam, Image, Mesh, MeshBuilder, Rect},
     winit::event::MouseButton,
+    conf::WindowSetup
 };
 use jonsh_chess::board::{Board, Tile};
 use jonsh_chess::pieces;
@@ -23,10 +32,14 @@ struct MainState {
     origin: Vec2,
     clicked_square: Option<(usize, usize)>,
     pieces: HashMap<&'static str, Image>,
+    tcp: TcpHandler,
+    my_color: pieces::Color
 }
 
+
+
 impl MainState {
-    fn new(ctx: &mut Context) -> GameResult<MainState> {
+    fn new(ctx: &mut Context, tcp: TcpHandler) -> GameResult<MainState> {
         let board = Board::new();
         let w: f32 = 600.0;
         let h: f32 = 600.0;
@@ -34,9 +47,12 @@ impl MainState {
         let side = (w.min(h) - 2.0 * pad).floor();
         let origin = Vec2::new((w - side) * 0.5, (h - side) * 0.5);
         let square_size = side / BOARD_SIZE as f32;
-
         let board_mesh = Self::build_board_mesh(ctx, origin, square_size)?;
 
+        let mut my_color= pieces::Color::White;
+        if tcp.server.expect("should be blabla") {
+            my_color = pieces::Color::Black;
+        };
         // load piece images once
         let mut pieces = std::collections::HashMap::new();
         pieces.insert("wp", Image::from_path(ctx, "/pieces/white-pawn.png")?);
@@ -60,6 +76,8 @@ impl MainState {
             clicked_square: None,
             origin,
             pieces,
+            tcp,
+            my_color
         })
     }
 
@@ -162,18 +180,61 @@ impl MainState {
 
         return Ok(Mesh::from_data(ctx, data));
         }
+
+
+    fn end_game(&self, _ctx: &mut Context, _msg:&str){
+        todo!()
+    }
 }
 
 impl event::EventHandler for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        if self.board.turn != self.my_color{
+            let msg = match self.tcp._read() {
+                Ok(msg) => msg,
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
+                    return Ok(());
+                }
+                Err(e) => panic!("encountered IO error: {e}"),
+            };
+            let parts: Vec<&str> = msg.split(':').collect();
+            let msg_type = parts[0];
+
+            if msg_type == "ChessQUIT" {
+                self.end_game(_ctx, "NOOOOO");
+            }
+
+            let mv = parts[1];
+            let state = parts[2];
+            let board = parts[3];
+
+            let (fc, fr, tc, tr, prom_piece) = from_move_string(mv);
+
+            let end = self.board.game_end();
+            println!("{} {} {}", end.0, end.1, end.2);
+
+            if self.board.legal_moves(fc, fr).contains(&(tc, tr)){
+                self.board.move_piece(fc, fr, tc, tr);
+                let this_board = to_fen(self.board.tiles);
+
+                if this_board != board {
+                    let quit_msg = String::from("ChessQUIT:your_board_is_different");
+                    let padded_quit_msg = add_padding(quit_msg);
+                    self.tcp._write(&padded_quit_msg)?;
+                }
+            } else {
+                let quit_msg = String::from("ChessQUIT:illegal_move");
+                let padded_quit_msg = add_padding(quit_msg);
+                self.tcp._write(&padded_quit_msg)?;
+                self.end_game(_ctx, "Illegal move");
+            }
+        }
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let mut canvas =
             graphics::Canvas::from_frame(ctx, graphics::Color::from([0.1, 0.2, 0.3, 1.0]));
-
-        
 
         canvas.draw(&self.board_mesh, DrawParam::default());
 
@@ -195,26 +256,57 @@ impl event::EventHandler for MainState {
         _x: f32,
         _y: f32,
     ) -> GameResult {
-        if _button == MouseButton::Left {
+        if _button == MouseButton::Left && self.my_color == self.board.turn{
             if let Some((row, col)) = self.px_to_square(_x, _y) {
                 match self.clicked_square {
                     None => {
                         self.clicked_square = Some((row, col));
                     }
                     Some((fr, fc)) => {
-                        self.board.move_piece(fc, fr, col, row);
-                        self.clicked_square = None;
+                        if self.board.legal_moves(fc, fr).contains(&(col, row)) {
+                            self.board.move_piece(fc, fr, col, row);
+
+                            let white = match self.board.turn {
+                                pieces::Color::Black => false,
+                                pieces::Color::White => true,
+                            };
+                            let mv = make_move_string(fc, fr, col, row, white);
+                            let state = String::from("0-0");
+                            let board_str = to_fen(self.board.tiles);
+                            let msg = make_msg(false, mv, state, board_str);
+                            self.tcp._write(&msg)?;
+
+                            self.clicked_square = None;
+                        } else {
+                            self.clicked_square = Some((row, col));
+                        }
                     }
                 }
             }
         }
+
         Ok(())
     }
 }
 
 pub fn main() -> GameResult {
-    let cb = ggez::ContextBuilder::new("super_simple", "ggez").add_resource_path("./assets"); // mount this dir
+    let args: Vec<String> = env::args().collect();
+    assert_eq!(args.len(), 3, "dont forget the params");
+    let side = &args[1];
+    let addr = &args[2];
+
+    let mut tcp = TcpHandler::new();
+
+    if side == "server" {
+        tcp.run_server(addr)?;
+    } else if side == "client" {
+        tcp.run_client(addr)?;
+    }
+
+    let cb = ggez::ContextBuilder::new(side, "ggez").window_setup(WindowSetup::default().title(side)).add_resource_path("./assets");
     let (mut ctx, event_loop) = cb.build()?;
-    let state = MainState::new(&mut ctx)?;
+
+    let state = MainState::new(&mut ctx, tcp)?;
+
     event::run(ctx, event_loop, state)
 }

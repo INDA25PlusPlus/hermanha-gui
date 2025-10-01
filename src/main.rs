@@ -33,7 +33,9 @@ struct MainState {
     clicked_square: Option<(usize, usize)>,
     pieces: HashMap<&'static str, Image>,
     tcp: TcpHandler,
-    my_color: pieces::Color
+    my_color: pieces::Color,
+    game_over: bool,
+    end_message: Option<String>
 }
 
 
@@ -77,7 +79,9 @@ impl MainState {
             origin,
             pieces,
             tcp,
-            my_color
+            my_color,
+            game_over: false,
+            end_message: None
         })
     }
 
@@ -182,13 +186,18 @@ impl MainState {
         }
 
 
-    fn end_game(&self, _ctx: &mut Context, _msg:&str){
-        todo!()
+    fn end_game(&mut self, _ctx: &mut Context, msg: &str) {
+        // Mark the game as finished and store the message to render in draw()
+        self.game_over = true;
+        self.end_message = Some(msg.to_string());
     }
 }
 
 impl event::EventHandler for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        if self.game_over {
+            return Ok(());
+        }
         if self.board.turn != self.my_color{
             let msg = match self.tcp._read() {
                 Ok(msg) => msg,
@@ -202,6 +211,7 @@ impl event::EventHandler for MainState {
 
             if msg_type == "ChessQUIT" {
                 self.end_game(_ctx, "NOOOOO");
+                return Ok(());
             }
 
             let mv = parts[1];
@@ -210,17 +220,44 @@ impl event::EventHandler for MainState {
 
             let (fc, fr, tc, tr, prom_piece) = from_move_string(mv);
 
-            let end = self.board.game_end();
-            println!("{} {} {}", end.0, end.1, end.2);
-
-            if self.board.legal_moves(fc, fr).contains(&(tc, tr)){
+            if self.board.legal_moves(fc, fr).contains(&(tc, tr)) {
                 self.board.move_piece(fc, fr, tc, tr);
-                let this_board = to_fen(self.board.tiles);
 
-                if this_board != board {
-                    let quit_msg = String::from("ChessQUIT:your_board_is_different");
+                let mut my_state = String::from("0-0");
+                let (is_checkmate, is_white, is_stalemate) = self.board.game_end();
+                if is_checkmate {
+                    if is_white {
+                        my_state = "0-1".to_string(); 
+                    } else {
+                        my_state = "1-0".to_string(); 
+                    }
+                } else if is_stalemate {
+                    my_state = "1-1".to_string();
+                }
+
+                if my_state != state {
+                    let quit_msg = String::from("ChessQUIT:your_state_is_different");
                     let padded_quit_msg = add_padding(quit_msg);
                     self.tcp._write(&padded_quit_msg)?;
+                    self.end_game(_ctx, "State mismatch");
+                } else {
+                    if my_state != "0-0" {
+                        let end_msg = match my_state.as_str() {
+                            "1-0" => "Checkmate: White wins",
+                            "0-1" => "Checkmate: Black wins",
+                            "1-1" => "Stalemate",
+                            _ => "Game over",
+                        };
+                        self.end_game(_ctx, end_msg);
+                    } else {
+                        let this_board = to_fen(self.board.tiles);
+                        if this_board != board {
+                            let quit_msg = String::from("ChessQUIT:your_board_is_different");
+                            let padded_quit_msg = add_padding(quit_msg);
+                            self.tcp._write(&padded_quit_msg)?;
+                            self.end_game(_ctx, "Board mismatch");
+                        }
+                    }
                 }
             } else {
                 let quit_msg = String::from("ChessQUIT:illegal_move");
@@ -244,6 +281,24 @@ impl event::EventHandler for MainState {
         }
         self.place_pieces(&mut canvas)?;
 
+        if self.game_over {
+            let overlay_bounds = Rect::new(self.origin.x, self.origin.y, self.board_size, self.board_size);
+            let mut overlay_builder = MeshBuilder::new();
+
+            overlay_builder.rectangle(DrawMode::fill(), overlay_bounds, Color::from_rgba(0, 0, 0, 180))?;
+            let overlay_mesh = Mesh::from_data(ctx, overlay_builder.build());
+            canvas.draw(&overlay_mesh, DrawParam::default());
+
+            if let Some(msg) = &self.end_message {
+                let mut text = graphics::Text::new(msg.as_str());
+
+                let size = text.measure(ctx)?;
+                let x = self.origin.x + (self.board_size - size.x) * 0.5;
+                let y = self.origin.y + (self.board_size - size.y) * 0.5;
+                canvas.draw(&text, DrawParam::default().dest(Vec2::new(x, y)));
+            }
+        }
+
         canvas.finish(ctx)?;
 
         Ok(())
@@ -256,6 +311,7 @@ impl event::EventHandler for MainState {
         _x: f32,
         _y: f32,
     ) -> GameResult {
+        if self.game_over { return Ok(()); }
         if _button == MouseButton::Left && self.my_color == self.board.turn{
             if let Some((row, col)) = self.px_to_square(_x, _y) {
                 match self.clicked_square {
@@ -271,9 +327,31 @@ impl event::EventHandler for MainState {
                                 pieces::Color::White => true,
                             };
                             let mv = make_move_string(fc, fr, col, row, white);
-                            let state = String::from("0-0");
+                            let mut my_state = String::from("0-0");
+
+                            let (is_checkmate, is_white, is_stalemate) = self.board.game_end();
+                            if is_checkmate {
+                                if is_white {
+                                    my_state = "0-1".to_string(); 
+                                } else {
+                                    my_state = "1-0".to_string(); 
+                                }
+                            } else if is_stalemate {
+                                my_state = "1-1".to_string();
+                            }
+
+                            if my_state != "0-0" {
+                                let end_msg = match my_state.as_str() {
+                                    "1-0" => "Checkmate: White wins",
+                                    "0-1" => "Checkmate: Black wins",
+                                    "1-1" => "Stalemate",
+                                    _ => "Game over",
+                                };
+                                self.end_game(_ctx, end_msg);
+                            }
+
                             let board_str = to_fen(self.board.tiles);
-                            let msg = make_msg(false, mv, state, board_str);
+                            let msg = make_msg(false, mv, my_state, board_str);
                             self.tcp._write(&msg)?;
 
                             self.clicked_square = None;

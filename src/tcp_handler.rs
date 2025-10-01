@@ -18,6 +18,7 @@ impl TcpHandler {
         let listener = TcpListener::bind(bind_addr)?;
         let (stream, sock_addr) = listener.accept()?;
         println!("Client connected from {sock_addr}");
+        stream.set_nonblocking(true).expect("set_nonblocking call failed");
         self.stream = Some(stream);
         self.server = Some(true);
         Ok(())

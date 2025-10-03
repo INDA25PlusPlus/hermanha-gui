@@ -2,7 +2,6 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use std::collections::HashMap;
-use std::fmt::write;
 use std::{env, io};
 
 mod utils;
@@ -13,11 +12,11 @@ use crate::tcp_handler::*;
 
 use ggez::{
     Context, GameError, GameResult,
+    conf::WindowSetup,
     event::{self},
     glam::*,
     graphics::{self, Canvas, Color, DrawMode, DrawParam, Image, Mesh, MeshBuilder, Rect},
     winit::event::MouseButton,
-    conf::WindowSetup
 };
 use jonsh_chess::board::{Board, Tile};
 use jonsh_chess::pieces;
@@ -35,10 +34,8 @@ struct MainState {
     tcp: TcpHandler,
     my_color: pieces::Color,
     game_over: bool,
-    end_message: Option<String>
+    end_message: Option<String>,
 }
-
-
 
 impl MainState {
     fn new(ctx: &mut Context, tcp: TcpHandler) -> GameResult<MainState> {
@@ -51,7 +48,7 @@ impl MainState {
         let square_size = side / BOARD_SIZE as f32;
         let board_mesh = Self::build_board_mesh(ctx, origin, square_size)?;
 
-        let mut my_color= pieces::Color::White;
+        let mut my_color = pieces::Color::White;
         if tcp.server.expect("should be blabla") {
             my_color = pieces::Color::Black;
         };
@@ -81,7 +78,7 @@ impl MainState {
             tcp,
             my_color,
             game_over: false,
-            end_message: None
+            end_message: None,
         })
     }
 
@@ -168,8 +165,12 @@ impl MainState {
         Ok(())
     }
 
-    fn highlight_square(&self, ctx: &mut Context, row: usize, col: usize) -> Result<Mesh, GameError>{
-        
+    fn highlight_square(
+        &self,
+        ctx: &mut Context,
+        row: usize,
+        col: usize,
+    ) -> Result<Mesh, GameError> {
         let x = self.origin.x + col as f32 * self.square_size;
         let y = self.origin.y + row as f32 * self.square_size;
 
@@ -183,8 +184,7 @@ impl MainState {
         let data = builder.build();
 
         return Ok(Mesh::from_data(ctx, data));
-        }
-
+    }
 
     fn end_game(&mut self, _ctx: &mut Context, msg: &str) {
         // Mark the game as finished and store the message to render in draw()
@@ -198,7 +198,7 @@ impl event::EventHandler for MainState {
         if self.game_over {
             return Ok(());
         }
-        if self.board.turn != self.my_color{
+        if self.board.turn != self.my_color {
             let msg = match self.tcp._read() {
                 Ok(msg) => msg,
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
@@ -218,7 +218,7 @@ impl event::EventHandler for MainState {
             let state = parts[2];
             let board = parts[3];
 
-            let (fc, fr, tc, tr, prom_piece) = from_move_string(mv);
+            let (fc, fr, tc, tr, _prom_piece) = from_move_string(mv);
 
             if self.board.legal_moves(fc, fr).contains(&(tc, tr)) {
                 self.board.move_piece(fc, fr, tc, tr);
@@ -227,9 +227,9 @@ impl event::EventHandler for MainState {
                 let (is_checkmate, is_white, is_stalemate) = self.board.game_end();
                 if is_checkmate {
                     if is_white {
-                        my_state = "0-1".to_string(); 
+                        my_state = "0-1".to_string();
                     } else {
-                        my_state = "1-0".to_string(); 
+                        my_state = "1-0".to_string();
                     }
                 } else if is_stalemate {
                     my_state = "1-1".to_string();
@@ -282,15 +282,24 @@ impl event::EventHandler for MainState {
         self.place_pieces(&mut canvas)?;
 
         if self.game_over {
-            let overlay_bounds = Rect::new(self.origin.x, self.origin.y, self.board_size, self.board_size);
+            let overlay_bounds = Rect::new(
+                self.origin.x,
+                self.origin.y,
+                self.board_size,
+                self.board_size,
+            );
             let mut overlay_builder = MeshBuilder::new();
 
-            overlay_builder.rectangle(DrawMode::fill(), overlay_bounds, Color::from_rgba(0, 0, 0, 180))?;
+            overlay_builder.rectangle(
+                DrawMode::fill(),
+                overlay_bounds,
+                Color::from_rgba(0, 0, 0, 180),
+            )?;
             let overlay_mesh = Mesh::from_data(ctx, overlay_builder.build());
             canvas.draw(&overlay_mesh, DrawParam::default());
 
             if let Some(msg) = &self.end_message {
-                let mut text = graphics::Text::new(msg.as_str());
+                let text = graphics::Text::new(msg.as_str());
 
                 let size = text.measure(ctx)?;
                 let x = self.origin.x + (self.board_size - size.x) * 0.5;
@@ -311,8 +320,10 @@ impl event::EventHandler for MainState {
         _x: f32,
         _y: f32,
     ) -> GameResult {
-        if self.game_over { return Ok(()); }
-        if _button == MouseButton::Left && self.my_color == self.board.turn{
+        if self.game_over {
+            return Ok(());
+        }
+        if _button == MouseButton::Left && self.my_color == self.board.turn {
             if let Some((row, col)) = self.px_to_square(_x, _y) {
                 match self.clicked_square {
                     None => {
@@ -332,9 +343,9 @@ impl event::EventHandler for MainState {
                             let (is_checkmate, is_white, is_stalemate) = self.board.game_end();
                             if is_checkmate {
                                 if is_white {
-                                    my_state = "0-1".to_string(); 
+                                    my_state = "0-1".to_string();
                                 } else {
-                                    my_state = "1-0".to_string(); 
+                                    my_state = "1-0".to_string();
                                 }
                             } else if is_stalemate {
                                 my_state = "1-1".to_string();
@@ -381,7 +392,9 @@ pub fn main() -> GameResult {
         tcp.run_client(addr)?;
     }
 
-    let cb = ggez::ContextBuilder::new(side, "ggez").window_setup(WindowSetup::default().title(side)).add_resource_path("./assets");
+    let cb = ggez::ContextBuilder::new(side, "ggez")
+        .window_setup(WindowSetup::default().title(side))
+        .add_resource_path("./assets");
     let (mut ctx, event_loop) = cb.build()?;
 
     let state = MainState::new(&mut ctx, tcp)?;

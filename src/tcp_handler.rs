@@ -6,31 +6,38 @@ use std::{
 pub const MSG_SIZE: usize = 128;
 pub struct TcpHandler {
     stream: Option<TcpStream>,
-    pub server: Option<bool>
+    pub server: Option<bool>,
 }
 
 impl TcpHandler {
-    pub fn new() -> Self{
-        Self { stream: None, server: None}
+    pub fn new() -> Self {
+        Self {
+            stream: None,
+            server: None,
+        }
     }
 
-    pub fn run_server(&mut self, bind_addr: &str) -> io::Result<()>{
+    pub fn run_server(&mut self, bind_addr: &str) -> io::Result<()> {
         let listener = TcpListener::bind(bind_addr)?;
         let (stream, sock_addr) = listener.accept()?;
         println!("Client connected from {sock_addr}");
-        stream.set_nonblocking(true).expect("set_nonblocking call failed");
+        stream
+            .set_nonblocking(true)
+            .expect("set_nonblocking call failed");
         self.stream = Some(stream);
         self.server = Some(true);
         Ok(())
     }
 
-    pub fn run_client(&mut self, remote_addr: &str) -> io::Result<()>{
+    pub fn run_client(&mut self, remote_addr: &str) -> io::Result<()> {
         let stream = TcpStream::connect(remote_addr)?;
         println!("Connected to server at {remote_addr}");
-        stream.set_nonblocking(true).expect("set_nonblocking call failed");
+        stream
+            .set_nonblocking(true)
+            .expect("set_nonblocking call failed");
         self.stream = Some(stream);
         self.server = Some(false);
-        
+
         Ok(())
     }
 
@@ -40,7 +47,10 @@ impl TcpHandler {
             stream.flush()?;
             Ok(())
         } else {
-            Err(io::Error::new(io::ErrorKind::NotConnected, "barabingbaraboom"))
+            Err(io::Error::new(
+                io::ErrorKind::NotConnected,
+                "barabingbaraboom",
+            ))
         }
     }
 
@@ -52,7 +62,10 @@ impl TcpHandler {
             let msg = String::from_utf8_lossy(&buf).to_string();
             Ok(msg)
         } else {
-            Err(io::Error::new(io::ErrorKind::NotConnected, "barabingbaraboom"))
+            Err(io::Error::new(
+                io::ErrorKind::NotConnected,
+                "barabingbaraboom",
+            ))
         }
     }
 }

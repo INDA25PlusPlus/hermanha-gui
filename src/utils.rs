@@ -7,7 +7,7 @@ pub fn to_fen(tiles: [[Tile; 8]; 8]) -> String {
     let mut fen = String::new();
     let mut empty_squares: usize = 0;
 
-    for row in tiles {
+    for (row_i, row) in tiles.iter().enumerate() {
         for tile in row {
             if let Tile::Occupied(color, piece) = tile.to_owned() {
                 if empty_squares > 0 {
@@ -39,7 +39,9 @@ pub fn to_fen(tiles: [[Tile; 8]; 8]) -> String {
             empty_squares = 0;
         }
 
-        fen.push('/');
+        if row_i != 7 {
+            fen.push('/');
+        }
     }
 
     fen

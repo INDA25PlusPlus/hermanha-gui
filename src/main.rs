@@ -330,42 +330,48 @@ impl event::EventHandler for MainState {
                         self.clicked_square = Some((row, col));
                     }
                     Some((fr, fc)) => {
-                        if self.board.legal_moves(fc, fr).contains(&(col, row)) {
-                            self.board.move_piece(fc, fr, col, row);
+                        if let Tile::Occupied(color, _piece) = self.board.tiles[fr][fc]
+                            && color == self.board.turn
+                        {
+                            if self.board.legal_moves(fc, fr).contains(&(col, row)) {
+                                self.board.move_piece(fc, fr, col, row);
 
-                            let white = match self.board.turn {
-                                pieces::Color::Black => false,
-                                pieces::Color::White => true,
-                            };
-                            let mv = make_move_string(fc, fr, col, row, white);
-                            let mut my_state = String::from("0-0");
-
-                            let (is_checkmate, is_white, is_stalemate) = self.board.game_end();
-                            if is_checkmate {
-                                if is_white {
-                                    my_state = "0-1".to_string();
-                                } else {
-                                    my_state = "1-0".to_string();
-                                }
-                            } else if is_stalemate {
-                                my_state = "1-1".to_string();
-                            }
-
-                            if my_state != "0-0" {
-                                let end_msg = match my_state.as_str() {
-                                    "1-0" => "Checkmate: White wins",
-                                    "0-1" => "Checkmate: Black wins",
-                                    "1-1" => "Stalemate",
-                                    _ => "Game over",
+                                let white = match self.board.turn {
+                                    pieces::Color::Black => false,
+                                    pieces::Color::White => true,
                                 };
-                                self.end_game(_ctx, end_msg);
+                                let mv = make_move_string(fc, fr, col, row, white);
+                                let mut my_state = String::from("0-0");
+
+                                let (is_checkmate, is_white, is_stalemate) = self.board.game_end();
+                                if is_checkmate {
+                                    if is_white {
+                                        my_state = "0-1".to_string();
+                                    } else {
+                                        my_state = "1-0".to_string();
+                                    }
+                                } else if is_stalemate {
+                                    my_state = "1-1".to_string();
+                                }
+
+                                if my_state != "0-0" {
+                                    let end_msg = match my_state.as_str() {
+                                        "1-0" => "Checkmate: White wins",
+                                        "0-1" => "Checkmate: Black wins",
+                                        "1-1" => "Stalemate",
+                                        _ => "Game over",
+                                    };
+                                    self.end_game(_ctx, end_msg);
+                                }
+
+                                let board_str = to_fen(self.board.tiles);
+                                let msg = make_msg(false, mv, my_state, board_str);
+                                self.tcp._write(&msg)?;
+
+                                self.clicked_square = None;
+                            } else {
+                                self.clicked_square = Some((row, col));
                             }
-
-                            let board_str = to_fen(self.board.tiles);
-                            let msg = make_msg(false, mv, my_state, board_str);
-                            self.tcp._write(&msg)?;
-
-                            self.clicked_square = None;
                         } else {
                             self.clicked_square = Some((row, col));
                         }
